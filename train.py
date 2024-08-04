@@ -40,7 +40,7 @@ def main():
                     "warmup_teacher_temp_epochs": 0,
                     "student_temp": 0.1,
                     "center_momentum": 0.9,
-                    "local_crops_number": 4,
+                    "local_crops_number": 8,
                     "log_number": 1000,
                 }
     
