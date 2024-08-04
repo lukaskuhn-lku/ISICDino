@@ -31,7 +31,7 @@ def main():
     #  2. Capture a dictionary of hyperparameters
     config = {
                     "epochs": 100, 
-                    "learning_rate": 0.0005 * 16 / 256, 
+                    "learning_rate": 1e-3, 
                     "batch_size": 32, 
                     "momentum_teacher": 0.995, 
                     "embedding_size": 1024,
