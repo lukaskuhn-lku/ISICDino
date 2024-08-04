@@ -32,7 +32,7 @@ def main():
     config = {
                     "epochs": 100, 
                     "learning_rate": 0.0005 * 16 / 256, 
-                    "batch_size": 16, 
+                    "batch_size": 64, 
                     "momentum_teacher": 0.995, 
                     "embedding_size": 1024,
                     "warmup_teacher_temp": 0.04,
@@ -40,7 +40,7 @@ def main():
                     "warmup_teacher_temp_epochs": 0,
                     "student_temp": 0.1,
                     "center_momentum": 0.9,
-                    "local_crops_number": 8,
+                    "local_crops_number": 4,
                     "log_number": 1000,
                 }
     
