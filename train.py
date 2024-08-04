@@ -55,7 +55,7 @@ def main():
 
     fix_random_seeds(42)
 
-    metadata = pd.read_csv('data/ISIC_2024_Training_Input/metadata.csv')
+    metadata = pd.read_csv('data/metadata.csv')
     labels = metadata['malignant'].values.astype(int)
     files = [f"data/ISIC_2024_Training_Input/{f}" for f in os.listdir('data/ISIC24') if f.endswith('.jpg')]
 
