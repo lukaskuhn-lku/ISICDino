@@ -55,9 +55,9 @@ def main():
 
     fix_random_seeds(42)
 
-    metadata = pd.read_csv('data/metadata.csv')
+    metadata = pd.read_csv('data/ISIC_2024_Training_Input/metadata.csv')
     labels = metadata['malignant'].values.astype(int)
-    files = [f"data/ISIC24/{f}" for f in os.listdir('data/ISIC24')]
+    files = [f"data/ISIC_2024_Training_Input/{f}" for f in os.listdir('data/ISIC24') if f.endswith('.jpg')]
 
     transform = DataAugmentationDINO(global_crops_scale=(0.4, 1.0), local_crops_scale=(0.05, 0.4), local_crops_number=8)
 
@@ -79,7 +79,7 @@ def main():
     # sample all the indices via the weighted sampler
     indices = list(sampler)
 
-    sampler = WeightedRandomSampler(weights, 2500, replacement=False)
+    sampler = WeightedRandomSampler(weights, 5000, replacement=False)
     indices_train = list(sampler)
 
     # remove from train indices the indices that are in the validation indices
