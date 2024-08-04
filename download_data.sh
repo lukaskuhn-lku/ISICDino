@@ -11,7 +11,7 @@ mkdir -p $TARGET_DIR
 curl -o /tmp/ISIC_2024_Training_Input.zip $URL
 
 # Extract the contents of the zip file to the target directory
-unzip /tmp/ISIC_2024_Training_Input.zip -d $TARGET_DIR
+unzip -q /tmp/ISIC_2024_Training_Input.zip -d $TARGET_DIR
 
 # Clean up the downloaded zip file
 rm /tmp/ISIC_2024_Training_Input.zip
