@@ -62,7 +62,7 @@ def main():
     transform = DataAugmentationDINO(global_crops_scale=(0.4, 1.0), local_crops_scale=(0.05, 0.4), local_crops_number=8)
 
     dataset = ISICDataset(files, labels, transform=transform)
-    dataset_loader = DataLoader(dataset, batch_size=wandb.config["batch_size"], shuffle=True)
+    dataset_loader = DataLoader(dataset, batch_size=wandb.config["batch_size"], shuffle=True, num_workers=4, pin_memory=True)
 
 
     targets = torch.tensor(dataset.labels)
@@ -129,11 +129,11 @@ def main():
         for images, _ in tqdm(dataset_loader):
             images = [img.cuda() for img in images]
             
-            #with torch.autocast(device_type="cuda"):
-            student_output = student(images)
-            teacher_output = teacher(images[:2])
+            with torch.autocast(device_type="cuda"):
+                student_output = student(images)
+                teacher_output = teacher(images[:2])
 
-            loss = dino_loss(student_output, teacher_output, e)
+                loss = dino_loss(student_output, teacher_output, e)
 
             wandb.log({"loss": loss})
 
