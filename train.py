@@ -99,8 +99,8 @@ def main():
     student = MultiCropWrapper(student, DINOHead(768, 1024))
     teacher = MultiCropWrapper(teacher, DINOHead(768, 1024))
 
-    student = student.to(device)
-    teacher = teacher.to(device)
+    student = student.cuda()
+    teacher = teacher.cuda()
 
     for p in teacher.parameters():
         p.requires_grad = False
@@ -114,7 +114,7 @@ def main():
         wandb.config["epochs"]
     )
 
-    dino_loss = dino_loss.to(device)
+    dino_loss = dino_loss.cuda()
 
     lr = wandb.config["learning_rate"]
     optimizer = torch.optim.AdamW(student.parameters(), lr=lr, weight_decay=1e-6)
@@ -127,7 +127,7 @@ def main():
     for e in range(epochs):
         num_batches = 0
         for images, _ in tqdm(dataset_loader):
-            images = [img.to(device) for img in images]
+            images = [img.cuda() for img in images]
             
             with torch.autocast(device_type="cuda"):
                 student_output = student(images)
