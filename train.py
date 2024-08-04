@@ -32,7 +32,7 @@ def main():
     config = {
                     "epochs": 100, 
                     "learning_rate": 0.0005 * 16 / 256, 
-                    "batch_size": 64, 
+                    "batch_size": 32, 
                     "momentum_teacher": 0.995, 
                     "embedding_size": 1024,
                     "warmup_teacher_temp": 0.04,
