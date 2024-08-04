@@ -32,7 +32,7 @@ def main():
     config = {
                     "epochs": 100, 
                     "learning_rate": 0.0005 * 16 / 256, 
-                    "batch_size": 2, 
+                    "batch_size": 16, 
                     "momentum_teacher": 0.995, 
                     "embedding_size": 1024,
                     "warmup_teacher_temp": 0.04,
@@ -159,6 +159,9 @@ def main():
         # save both the student and the teacher after each epoch
         torch.save(student.state_dict(), f"models/student_{e}.pth")
         torch.save(teacher.state_dict(), f"models/teacher_{e}.pth")
+
+        run.log_model(path="models/student_{e}.pth", name=f"student_{e}")
+        run.log_model(path="models/teacher_{e}.pth", name=f"teacher_{e}")
 
 
 if __name__ == "__main__":
