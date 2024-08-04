@@ -129,11 +129,11 @@ def main():
         for images, _ in tqdm(dataset_loader):
             images = [img.cuda() for img in images]
             
-            with torch.autocast(device_type="cuda"):
-                student_output = student(images)
-                teacher_output = teacher(images[:2])
+            #with torch.autocast(device_type="cuda"):
+            student_output = student(images)
+            teacher_output = teacher(images[:2])
 
-                loss = dino_loss(student_output, teacher_output, e)
+            loss = dino_loss(student_output, teacher_output, e)
 
             wandb.log({"loss": loss})
 
