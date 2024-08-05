@@ -10,7 +10,7 @@ from torchvision.models import vit_b_16
 from utils import fix_random_seeds, clip_gradients, compute_knn_accuracy
 from dataset import ISICDataset
 from torch.utils.data import Subset
-from dino import DataAugmentationDINO, MultiCropWrapper, Head, Loss
+from dino import DataAugmentation, MultiCropWrapper, Head, Loss
 from torchvision.transforms import Compose, Resize, ToTensor, Normalize
 
 import wandb
@@ -60,7 +60,7 @@ def main():
     labels = metadata['malignant'].values.astype(int)
     files = [f"data/ISIC_2024_Training_Input/{f}" for f in os.listdir('data/ISIC_2024_Training_Input') if f.endswith('.jpg')]
 
-    transform = DataAugmentationDINO(global_crops_scale=(0.4, 1.0), local_crops_scale=(0.05, 0.4), local_crops_number=8)
+    transform = DataAugmentation(global_crops_scale=(0.4, 1.0), local_crops_scale=(0.05, 0.4), n_local_crops=wandb.config["local_crops_number"])
 
     total_train_size = wandb.config["train_size"]
 
