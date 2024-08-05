@@ -67,8 +67,8 @@ def compute_knn_accuracy(backbone, knn_train_dataset, knn_val_dataset, k=200):
 def compute_knn_accuracy(backbone, knn_train_dataset, knn_val_dataset, device, k=200):
     backbone.eval()
     backbone.to(device)
-    knn_train_loader = DataLoader(knn_train_dataset, batch_size=16, shuffle=False)
-    knn_val_loader = DataLoader(knn_val_dataset, batch_size=16, shuffle=False)
+    knn_train_loader = DataLoader(knn_train_dataset, batch_size=16, shuffle=False, num_workers=4, pin_memory=True)
+    knn_val_loader = DataLoader(knn_val_dataset, batch_size=16, shuffle=False, num_workers=4, pin_memory=True)
 
     train_features = []
     train_labels = []

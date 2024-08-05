@@ -102,7 +102,7 @@ def main():
 
     knn_train_dataset = Subset(dataset_knn, torch.cat([positive_indices_knn_train, negative_indices_knn_train]))
 
-    dataset_loader = DataLoader(train_dataset, batch_size=wandb.config["batch_size"], shuffle=True)
+    dataset_loader = DataLoader(train_dataset, batch_size=wandb.config["batch_size"], shuffle=True, num_workers=4, pin_memory=True)
 
     student = vit_b_16(weights=None)
     teacher = vit_b_16(weights=None)
