@@ -8,9 +8,11 @@ from torch.utils.data import DataLoader
 from torchvision.models import vit_b_16
 
 from utils import fix_random_seeds, clip_gradients, compute_knn_accuracy
-from dataset import ISICDataset, get_random_subset_without_given_indices
-from torch.utils.data import WeightedRandomSampler, Subset
-from dino import DataAugmentationDINO, MultiCropWrapper, DINOHead, DINOLoss
+from dataset import ISICDataset
+from torch.utils.data import Subset
+from dino import DataAugmentationDINO, MultiCropWrapper, DINOHead, Loss
+from torchvision.transforms import Compose, Resize, ToTensor, Normalize
+
 import wandb
 
 def main():
@@ -31,7 +33,7 @@ def main():
     config = {
                     "epochs": 100, 
                     "learning_rate": 1e-3, 
-                    "batch_size": 32, 
+                    "batch_size": 1, 
                     "momentum_teacher": 0.995, 
                     "embedding_size": 1024,
                     "warmup_teacher_temp": 0.04,
@@ -40,8 +42,7 @@ def main():
                     "student_temp": 0.1,
                     "center_momentum": 0.9,
                     "local_crops_number": 8,
-                    "log_number": 1000,
-                }
+            }
     
     run = wandb.init(
         project="DINO ISIC24",
@@ -60,60 +61,70 @@ def main():
 
     transform = DataAugmentationDINO(global_crops_scale=(0.4, 1.0), local_crops_scale=(0.05, 0.4), local_crops_number=8)
 
-    dataset = ISICDataset(files, labels, transform=transform)
-    dataset_loader = DataLoader(dataset, batch_size=wandb.config["batch_size"], shuffle=True, num_workers=4, pin_memory=True)
+    total_train_size = 10000
 
+    norm_only = Compose([
+        Resize((224, 224)),
+        ToTensor(),
+        Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+    ])
 
-    targets = torch.tensor(dataset.labels)
-    class_counts = torch.bincount(targets)
-    num_zeros = class_counts[0].item()
-    num_ones = class_counts[1].item()
+    dataset_train = ISICDataset(files, labels, transform=transform)
+    dataset_knn = ISICDataset(files, labels, transform=norm_only)
 
-    # Create weight tensor
-    weights = torch.ones(len(targets))
-    weights[targets == 1] = num_zeros / num_ones
+    targets = torch.tensor(labels)
+    # get all indices where targets is 1
+    positive_indices = torch.where(targets == 1)[0]
 
-    sampler = WeightedRandomSampler(weights, 500, replacement=False)
+    # get 10.000 random indices where targets is 0
+    negative_indices = torch.where(targets == 0)[0]
+    negative_indices_train = negative_indices[torch.randperm(negative_indices.size(0))[:total_train_size-len(positive_indices)]]
 
-    # sample all the indices via the weighted sampler
-    indices = list(sampler)
+    # combine positive and negative indices
+    indices = torch.cat([positive_indices, negative_indices_train])
 
-    sampler = WeightedRandomSampler(weights, 5000, replacement=False)
-    indices_train = list(sampler)
+    train_dataset = Subset(dataset_train, indices)
 
-    # remove from train indices the indices that are in the validation indices
-    indices_train = [idx for idx in indices_train if idx not in indices]
+    # get 50% of the positive indices
+    positive_indices_knn_val = positive_indices[torch.randperm(positive_indices.size(0))[:len(positive_indices)//2]]
 
-    # get the subset of the dataset
-    val_knn_subset = Subset(dataset, indices)
+    # fill up to 1000 indices with negative indices
+    negative_indices_knn_val = negative_indices[torch.randperm(negative_indices.size(0))[:1000-len(positive_indices_knn_val)]]
 
-    # get the remaining indices
-    train_knn_subset = Subset(dataset, indices_train)
+    knn_val_dataset = Subset(dataset_knn, torch.cat([positive_indices_knn_val, negative_indices_knn_val]))
+
+    # get the rest of the positive indices
+    positive_indices_knn_train = positive_indices[torch.randperm(positive_indices.size(0))[len(positive_indices)//2:]]
+
+    # fill up to 5000 indices with negative indices
+    negative_indices_knn_train = negative_indices[torch.randperm(negative_indices.size(0))[1000-len(positive_indices_knn_val):(5000-len(positive_indices_knn_train))+(1000-len(positive_indices_knn_val))]]
+
+    knn_train_dataset = Subset(dataset_knn, torch.cat([positive_indices_knn_train, negative_indices_knn_train]))
+
+    dataset_loader = DataLoader(train_dataset, batch_size=wandb.config["batch_size"], shuffle=True)
 
     student = vit_b_16(weights=None)
     teacher = vit_b_16(weights=None)
 
     teacher.load_state_dict(student.state_dict())
 
-    student = MultiCropWrapper(student, DINOHead(768, 1024))
-    teacher = MultiCropWrapper(teacher, DINOHead(768, 1024))
+    student = MultiCropWrapper(student, DINOHead(768, wandb.config["embedding_size"]))
+    teacher = MultiCropWrapper(teacher, DINOHead(768, wandb.config["embedding_size"]))
 
-    student = student.cuda()
-    teacher = teacher.cuda()
+    student = student.to(device)
+    teacher = teacher.to(device)
 
     for p in teacher.parameters():
         p.requires_grad = False
 
-    dino_loss = DINOLoss(
+    dino_loss = Loss(
         wandb.config["embedding_size"],
-        wandb.config["local_crops_number"]+2,
-        wandb.config["warmup_teacher_temp"],
         wandb.config["teacher_temp"],
-        wandb.config["warmup_teacher_temp_epochs"],
-        wandb.config["epochs"]
+        wandb.config["student_temp"],
+        wandb.config["center_momentum"],
     )
 
-    dino_loss = dino_loss.cuda()
+    dino_loss = dino_loss.to(device)
 
     lr = wandb.config["learning_rate"]
     optimizer = torch.optim.AdamW(student.parameters(), lr=lr, weight_decay=1e-6)
@@ -126,13 +137,13 @@ def main():
     for e in range(epochs):
         num_batches = 0
         for images, _ in tqdm(dataset_loader):
-            images = [img.cuda() for img in images]
+            images = [img.to(device) for img in images]
             
             with torch.autocast(device_type="cuda"):
                 student_output = student(images)
                 teacher_output = teacher(images[:2])
 
-                loss = dino_loss(student_output, teacher_output, e)
+                loss = dino_loss(student_output, teacher_output)
 
             wandb.log({"loss": loss})
 
@@ -152,18 +163,18 @@ def main():
 
             num_batches += 1
 
-            if (num_batches % log_number) == 0:
-                print(f"Calculating KNN accuracy for report")
-                acc, preds, train_lbls, val_lbls = compute_knn_accuracy(student.backbone, train_knn_subset, val_knn_subset, device, 64)
-                wandb.log({"knn_acc": acc})
+        print(f"Calculating KNN accuracy for report")
+        acc, preds, train_lbls, val_lbls = compute_knn_accuracy(student.backbone, knn_train_dataset, knn_val_dataset, device, 64)
+        wandb.log({"knn_acc": acc})
 
         # save both the student and the teacher after each epoch
         torch.save(student.state_dict(), f"models/student_{e}.pth")
         torch.save(teacher.state_dict(), f"models/teacher_{e}.pth")
 
-        run.log_model(path="models/student_{e}.pth", name=f"student_{e}")
-        run.log_model(path="models/teacher_{e}.pth", name=f"teacher_{e}")
+        # save only the backbone of the student
+        torch.save(student.backbone.state_dict(), f"models/student_backbone_{e}.pth")
 
+        run.log_model(path="models/student_backbone_{e}.pth", name=f"student_backbone_{e}")
 
 if __name__ == "__main__":
     main()

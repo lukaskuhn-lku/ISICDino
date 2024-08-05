@@ -73,7 +73,6 @@ def compute_knn_accuracy(backbone, knn_train_dataset, knn_val_dataset, device, k
     train_features = []
     train_labels = []
     for images, labels in tqdm(knn_train_loader):
-        images = images[0]
         images = images.to(device)
         features = backbone(images)
         train_features.append(features.cpu().detach())
@@ -85,7 +84,6 @@ def compute_knn_accuracy(backbone, knn_train_dataset, knn_val_dataset, device, k
     val_features = []
     val_labels = []
     for images, labels in tqdm(knn_val_loader):
-        images = images[0]
         images = images.to(device)
         features = backbone(images)
         val_features.append(features.cpu().detach())
