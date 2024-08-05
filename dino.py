@@ -5,81 +5,134 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-class DataAugmentationDINO(object):
-    def __init__(self, global_crops_scale, local_crops_scale, local_crops_number):
+class DataAugmentation:
+    """Create crops of an input image together with additional augmentation.
 
-        gaussian_blur = transforms.GaussianBlur((5,5), (0.1, 2.0))
+    It generates 2 global crops and `n_local_crops` local crops.
 
-        flip_and_color_jitter = transforms.Compose([
-            transforms.RandomHorizontalFlip(p=0.5),
-            transforms.RandomApply(
-                [transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.2, hue=0.1)],
-                p=0.8
-            ),
-            transforms.RandomGrayscale(p=0.2),
-        ])
-        normalize = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
-        ])
+    Parameters
+    ----------
+    global_crops_scale : tuple
+        Range of sizes for the global crops.
 
-        # first global crop
-        self.global_transfo1 = transforms.Compose([
-            transforms.RandomResizedCrop(224, scale=global_crops_scale, interpolation=Image.BICUBIC),
-            flip_and_color_jitter,
-            transforms.RandomApply([gaussian_blur], p=1.0),
-            normalize,
-        ])
-        # second global crop
-        self.global_transfo2 = transforms.Compose([
-            transforms.RandomResizedCrop(224, scale=global_crops_scale, interpolation=Image.BICUBIC),
-            flip_and_color_jitter,
-            transforms.RandomApply([gaussian_blur], p=0.1),
-            transforms.RandomSolarize(0.2),
-            normalize,
-        ])
-        # transformation for the local small crops
-        self.local_crops_number = local_crops_number
-        self.local_transfo = transforms.Compose([
-            transforms.RandomResizedCrop(224, scale=local_crops_scale, interpolation=Image.BICUBIC),
-            flip_and_color_jitter,
-            transforms.RandomApply([gaussian_blur], p=0.5),
-            normalize,
-        ])
+    local_crops_scale : tuple
+        Range of sizes for the local crops.
 
-    def __call__(self, image):
-        crops = []
-        crops.append(self.global_transfo1(image))
-        crops.append(self.global_transfo2(image))
-        for _ in range(self.local_crops_number):
-            crops.append(self.local_transfo(image))
-        return crops
-    
-class MultiCropWrapper(nn.Module):
+    n_local_crops : int
+        Number of local crops to create.
+
+    size : int
+        The size of the final image.
+
+    Attributes
+    ----------
+    global_1, global_2 : transforms.Compose
+        Two global transforms.
+
+    local : transforms.Compose
+        Local transform. Note that the augmentation is stochastic so one
+        instance is enough and will lead to different crops.
     """
-    Perform forward pass separately on each resolution input.
-    The inputs corresponding to a single resolution are clubbed and single
-    forward is run on the same resolution inputs. Hence we do several
-    forward passes = number of different resolutions used. We then
-    concatenate all the output features and run the head forward on these
-    concatenated features.
-    """
-    def __init__(self, backbone, head):
-        super(MultiCropWrapper, self).__init__()
-        # disable layers dedicated to ImageNet labels classification
-        backbone.heads.head = nn.Identity()
-        self.backbone = backbone
-        self.head = head
+    def __init__(
+        self,
+        global_crops_scale=(0.4, 1),
+        local_crops_scale=(0.05, 0.4),
+        n_local_crops=8,
+        size=224,
+    ):
+        self.n_local_crops = n_local_crops
+        RandomGaussianBlur = lambda p: transforms.RandomApply(  # noqa
+            [transforms.GaussianBlur(kernel_size=5, sigma=(0.1, 2))],
+            p=p,
+        )
 
-    def forward(self, x):
-        n_crops = len(x)
-        concatenated = torch.cat(x, dim=0)  # (n_samples * n_crops, 3, size, size)
-        cls_embedding = self.backbone(concatenated)  # (n_samples * n_crops, in_dim)
-        logits = self.head(cls_embedding)  # (n_samples * n_crops, out_dim)
-        chunks = logits.chunk(n_crops)  # n_crops * (n_samples, out_dim)
+        flip_and_jitter = transforms.Compose(
+            [
+                transforms.RandomHorizontalFlip(p=0.5),
+                transforms.RandomApply(
+                    [
+                        transforms.ColorJitter(
+                            brightness=0.4,
+                            contrast=0.4,
+                            saturation=0.2,
+                            hue=0.1,
+                        ),
+                    ]
+                ),
+                transforms.RandomGrayscale(p=0.2),
+            ]
+        )
 
-        return chunks
-    
+        normalize = transforms.Compose(
+            [
+                transforms.ToTensor(),
+                transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+            ]
+        )
+
+        self.global_1 = transforms.Compose(
+            [
+                transforms.RandomResizedCrop(
+                    size,
+                    scale=global_crops_scale,
+                    interpolation=Image.BICUBIC,
+                ),
+                flip_and_jitter,
+                RandomGaussianBlur(1.0),  # always apply
+                normalize,
+            ],
+        )
+
+        self.global_2 = transforms.Compose(
+            [
+                transforms.RandomResizedCrop(
+                    size,
+                    scale=global_crops_scale,
+                    interpolation=Image.BICUBIC,
+                ),
+                flip_and_jitter,
+                RandomGaussianBlur(0.1),
+                transforms.RandomSolarize(170, p=0.2),
+                normalize,
+            ],
+        )
+
+        self.local = transforms.Compose(
+            [
+                transforms.RandomResizedCrop(
+                    size,
+                    scale=local_crops_scale,
+                    interpolation=Image.BICUBIC,
+                ),
+                flip_and_jitter,
+                RandomGaussianBlur(0.5),
+                normalize,
+            ],
+        )
+        
+    def __call__(self, img):
+        """Apply transformation.
+
+        Parameters
+        ----------
+        img : PIL.Image
+            Input image.
+
+        Returns
+        -------
+        all_crops : list
+            List of `torch.Tensor` representing different views of
+            the input `img`.
+        """
+        all_crops = []
+        all_crops.append(self.global_1(img))
+        all_crops.append(self.global_2(img))
+
+        all_crops.extend([self.local(img) for _ in range(self.n_local_crops)])
+
+        return all_crops
+
+
 class Head(nn.Module):
     """Network hooked up to the CLS token embedding.
 

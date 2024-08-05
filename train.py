@@ -132,6 +132,8 @@ def main():
 
     epochs = wandb.config["epochs"]
 
+    student.train()
+
     for e in range(epochs):
         num_batches = 0
         for images, _ in tqdm(dataset_loader):

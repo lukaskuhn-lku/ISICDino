@@ -95,7 +95,7 @@ def compute_knn_accuracy(backbone, knn_train_dataset, knn_val_dataset, device='c
     knn = KNN(n_neighbors=k)
     knn.fit(train_features, train_labels)
     val_predictions = knn.predict(val_features)
-    accuracy = (val_predictions == val_labels).float().mean().item()
+    accuracy = (val_predictions == val_labels).to(float).mean().item()
 
     backbone.train()
     return accuracy, val_predictions, train_labels, val_labels
