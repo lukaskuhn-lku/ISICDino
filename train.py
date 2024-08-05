@@ -31,18 +31,18 @@ def main():
 
     #  2. Capture a dictionary of hyperparameters
     config = {
-                    "train_size": 10000,
-                    "epochs": 100, 
-                    "learning_rate": 1e-3, 
-                    "batch_size": 32, 
-                    "momentum_teacher": 0.995, 
-                    "embedding_size": 1024,
-                    "warmup_teacher_temp": 0.04,
-                    "teacher_temp": 0.04,
-                    "warmup_teacher_temp_epochs": 0,
-                    "student_temp": 0.1,
-                    "center_momentum": 0.9,
-                    "local_crops_number": 8,
+                "train_size": 10000,
+                "epochs": 100, 
+                "learning_rate": 1e-3, 
+                "batch_size": 32, 
+                "momentum_teacher": 0.995, 
+                "embedding_size": 1024,
+                "warmup_teacher_temp": 0.04,
+                "teacher_temp": 0.04,
+                "warmup_teacher_temp_epochs": 0,
+                "student_temp": 0.1,
+                "center_momentum": 0.9,
+                "local_crops_number": 8,
             }
     
     run = wandb.init(
@@ -130,8 +130,6 @@ def main():
     lr = wandb.config["learning_rate"]
     optimizer = torch.optim.AdamW(student.parameters(), lr=lr, weight_decay=1e-6)
     momentum_teacher = wandb.config["momentum_teacher"]
-
-    log_number = wandb.config["log_number"]
 
     epochs = wandb.config["epochs"]
 
