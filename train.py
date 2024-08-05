@@ -60,7 +60,7 @@ def main():
     labels = metadata['malignant'].values.astype(int)
     files = [f"data/ISIC_2024_Training_Input/{f}" for f in os.listdir('data/ISIC_2024_Training_Input') if f.endswith('.jpg')]
 
-    transform = DataAugmentationDINO(global_crops_scale=(0.4, 1.0), local_crops_scale=(0.05, 0.4), n_local_crops=wandb.config["local_crops_number"])
+    transform = DataAugmentationDINO(global_crops_scale=(0.4, 1.0), local_crops_scale=(0.05, 0.4), local_crops_number=wandb.config["local_crops_number"])
 
     total_train_size = wandb.config["train_size"]
 
