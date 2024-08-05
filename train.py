@@ -25,15 +25,10 @@ def main():
           """)
 
 
-
-    # 1. Start a W&B Run
-
-
-    #  2. Capture a dictionary of hyperparameters
     config = {
                 "train_size": 10000,
                 "epochs": 100, 
-                "learning_rate": 1e-3, 
+                "learning_rate": 1e-5, 
                 "batch_size": 32, 
                 "momentum_teacher": 0.995, 
                 "embedding_size": 1024,
@@ -104,15 +99,16 @@ def main():
 
     dataset_loader = DataLoader(train_dataset, batch_size=wandb.config["batch_size"], shuffle=True, num_workers=4, pin_memory=True)
 
-    student = vit_b_16(weights=None)
-    teacher = vit_b_16(weights=None)
+    student_vit = vit_b_16(weights=None)
+    teacher_vit = vit_b_16(weights=None)
 
-    student = MultiCropWrapper(student, Head(768, wandb.config["embedding_size"], norm_last_layer=True))
-    teacher = MultiCropWrapper(teacher, Head(768, wandb.config["embedding_size"]))
+    student = MultiCropWrapper(student_vit, Head(768, wandb.config["embedding_size"], norm_last_layer=True))
+    teacher = MultiCropWrapper(teacher_vit, Head(768, wandb.config["embedding_size"]))
+
+    student, teacher = student.to(device), teacher.to(device)
 
     teacher.load_state_dict(student.state_dict())
 
-    student, teacher = student.to(device), teacher.to(device)
 
     for p in teacher.parameters():
         p.requires_grad = False
@@ -127,7 +123,7 @@ def main():
     dino_loss = dino_loss.to(device)
 
     lr = wandb.config["learning_rate"]
-    optimizer = torch.optim.AdamW(student.parameters(), lr=lr, weight_decay=0.4)
+    optimizer = torch.optim.AdamW(student.parameters(), lr=lr)
     momentum_teacher = wandb.config["momentum_teacher"]
 
     epochs = wandb.config["epochs"]
@@ -135,17 +131,15 @@ def main():
     student.train()
 
     for e in range(epochs):
-        num_batches = 0
         for images, _ in tqdm(dataset_loader):
             images = [img.to(device) for img in images]
             
-            with torch.autocast(device_type="cuda"):
-                student_output = student(images)
-                teacher_output = teacher(images[:2])
+            student_output = student(images)
+            teacher_output = teacher(images[:2])
 
-                loss = dino_loss(student_output, teacher_output)
+            loss = dino_loss(student_output, teacher_output)
 
-            wandb.log({"loss": loss})
+            wandb.log({"loss": loss.item()})
 
             optimizer.zero_grad()
             loss.backward()
@@ -161,20 +155,18 @@ def main():
                         (1 - momentum_teacher) * student_ps.detach().data
                     )
 
-            num_batches += 1
-
-        print(f"Calculating KNN accuracy for report")
-        acc, preds, train_lbls, val_lbls = compute_knn_accuracy(student.backbone, knn_train_dataset, knn_val_dataset, device, 64)
-        wandb.log({"knn_acc": acc})
+        #print(f"Calculating KNN accuracy for report")
+        #acc, preds, train_lbls, val_lbls = compute_knn_accuracy(student.backbone, knn_train_dataset, knn_val_dataset, device, 64)
+        #wandb.log({"knn_acc": acc})
 
         # save both the student and the teacher after each epoch
-        torch.save(student.state_dict(), f"models/student_{e}.pth")
-        torch.save(teacher.state_dict(), f"models/teacher_{e}.pth")
+        #torch.save(student.state_dict(), f"models/student_{e}.pth")
+        #torch.save(teacher.state_dict(), f"models/teacher_{e}.pth")
 
         # save only the backbone of the student
-        torch.save(student.backbone.state_dict(), f"models/student_backbone_{e}.pth")
+        #torch.save(student.backbone.state_dict(), f"models/student_backbone_{e}.pth")
 
-        run.log_model(path="models/student_backbone_{e}.pth", name=f"student_backbone_{e}")
+        #run.log_model(path="models/student_backbone_{e}.pth", name=f"student_backbone_{e}")
 
 if __name__ == "__main__":
     main()
