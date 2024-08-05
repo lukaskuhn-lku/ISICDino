@@ -10,7 +10,7 @@ from torchvision.models import vit_b_16
 from utils import fix_random_seeds, clip_gradients, compute_knn_accuracy
 from dataset import ISICDataset
 from torch.utils.data import Subset
-from dino import DataAugmentationDINO, MultiCropWrapper, DINOHead, Loss
+from dino import DataAugmentationDINO, MultiCropWrapper, Head, Loss
 from torchvision.transforms import Compose, Resize, ToTensor, Normalize
 
 import wandb
@@ -42,7 +42,7 @@ def main():
                 "warmup_teacher_temp_epochs": 0,
                 "student_temp": 0.1,
                 "center_momentum": 0.9,
-                "local_crops_number": 8,
+                "local_crops_number": 4,
             }
     
     run = wandb.init(
@@ -107,13 +107,12 @@ def main():
     student = vit_b_16(weights=None)
     teacher = vit_b_16(weights=None)
 
+    student = MultiCropWrapper(student, Head(768, wandb.config["embedding_size"], norm_last_layer=True))
+    teacher = MultiCropWrapper(teacher, Head(768, wandb.config["embedding_size"]))
+
     teacher.load_state_dict(student.state_dict())
 
-    student = MultiCropWrapper(student, DINOHead(768, wandb.config["embedding_size"]))
-    teacher = MultiCropWrapper(teacher, DINOHead(768, wandb.config["embedding_size"]))
-
-    student = student.to(device)
-    teacher = teacher.to(device)
+    student, teacher = student.to(device), teacher.to(device)
 
     for p in teacher.parameters():
         p.requires_grad = False
@@ -128,7 +127,7 @@ def main():
     dino_loss = dino_loss.to(device)
 
     lr = wandb.config["learning_rate"]
-    optimizer = torch.optim.AdamW(student.parameters(), lr=lr, weight_decay=1e-6)
+    optimizer = torch.optim.AdamW(student.parameters(), lr=lr, weight_decay=0.4)
     momentum_teacher = wandb.config["momentum_teacher"]
 
     epochs = wandb.config["epochs"]
