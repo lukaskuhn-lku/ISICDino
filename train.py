@@ -31,6 +31,7 @@ def main():
 
     #  2. Capture a dictionary of hyperparameters
     config = {
+                    "train_size": 10000,
                     "epochs": 100, 
                     "learning_rate": 1e-3, 
                     "batch_size": 1, 
@@ -61,7 +62,7 @@ def main():
 
     transform = DataAugmentationDINO(global_crops_scale=(0.4, 1.0), local_crops_scale=(0.05, 0.4), local_crops_number=8)
 
-    total_train_size = 10000
+    total_train_size = wandb.config["train_size"]
 
     norm_only = Compose([
         Resize((224, 224)),
