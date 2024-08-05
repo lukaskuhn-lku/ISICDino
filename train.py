@@ -34,7 +34,7 @@ def main():
                     "train_size": 10000,
                     "epochs": 100, 
                     "learning_rate": 1e-3, 
-                    "batch_size": 1, 
+                    "batch_size": 32, 
                     "momentum_teacher": 0.995, 
                     "embedding_size": 1024,
                     "warmup_teacher_temp": 0.04,
